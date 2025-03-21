@@ -1,11 +1,24 @@
 "use server"
 
 import { getInstagramFromDB, updateInstagramInDB } from "@/lib/db"
+import { validateToken } from "@/lib/instagram"
 
 export async function getInstagramSettings() {
   try {
     console.log("Getting Instagram settings from DB")
     const settings = await getInstagramFromDB()
+
+    // If connected, validate the token
+    if (settings.connected && settings.accessToken) {
+      const isTokenValid = await validateToken(settings.accessToken)
+
+      // If token is invalid, update the settings
+      if (!isTokenValid) {
+        console.warn("Instagram token is invalid, marking as disconnected")
+        settings.connected = false
+      }
+    }
+
     return settings
   } catch (error) {
     console.error("Error fetching Instagram settings:", error)

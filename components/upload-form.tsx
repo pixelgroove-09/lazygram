@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Upload, ImagePlus, X, AlertCircle, Save, Trash2, Loader2 } from "lucide-react"
@@ -15,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getSavedPrompts, savePrompt, deletePrompt } from "@/app/actions/prompt-actions"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -32,11 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
-// Add this import at the top
 import { calculateNextAvailableSlots } from "@/lib/schedule-utils"
-
-// Add this import at the top
 import { useGallery } from "@/contexts/gallery-context"
 
 interface SavedPrompt {
@@ -58,9 +54,8 @@ export default function UploadForm() {
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false)
   const [promptName, setPromptName] = useState("")
   const [loadingSavedPrompts, setLoadingSavedPrompts] = useState(true)
-  const [autoSchedule, setAutoSchedule] = useState(true) // New state for auto-schedule toggle
+  const [autoSchedule, setAutoSchedule] = useState(true)
 
-  // Inside the component, add this line near the other hooks
   const { refreshGallery } = useGallery()
 
   useEffect(() => {
@@ -214,7 +209,7 @@ export default function UploadForm() {
       }))
       setUploadStatus((prev) => ({
         ...prev,
-        [index]: "Generating captions (mock)...",
+        [index]: "Generating captions...",
       }))
 
       // Now analyze the image with Claude and save to DB
@@ -341,7 +336,7 @@ export default function UploadForm() {
       })
 
       setFiles([])
-      refreshGallery() // Add this line to refresh the gallery
+      refreshGallery() // Refresh the gallery
       router.refresh()
     } catch (error) {
       console.error("Upload error:", error)
@@ -363,7 +358,7 @@ export default function UploadForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Thematic Prompt Section - Moved to the top */}
+          {/* Thematic Prompt Section */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="prompt" className="text-sm font-medium">
@@ -460,19 +455,17 @@ export default function UploadForm() {
 
           {/* Auto-schedule option */}
           <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
+            <Checkbox
               id="auto-schedule"
               checked={autoSchedule}
-              onChange={(e) => setAutoSchedule(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              onCheckedChange={(checked) => setAutoSchedule(checked as boolean)}
             />
             <Label htmlFor="auto-schedule" className="text-sm font-medium cursor-pointer">
               Auto-schedule posts based on your frequency settings
             </Label>
           </div>
 
-          {/* Image Upload Area - Now below the prompt */}
+          {/* Image Upload Area */}
           <div
             className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center min-h-[200px] ${
               dragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"

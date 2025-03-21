@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Instagram, Link, Unlink, Check } from "lucide-react"
+import { Instagram, Link, Unlink, Check, AlertCircle, Loader2, RefreshCw, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { mockInstagramAuth } from "@/lib/instagram-mock"
-import { updateInstagramInDB, getInstagramFromDB } from "@/lib/db"
+import { getInstagramSettings, disconnectInstagram } from "@/app/actions/instagram-actions"
 
 interface InstagramSettings {
   connected: boolean
@@ -25,16 +24,61 @@ export default function InstagramSettings() {
   const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const [isDevelopment, setIsDevelopment] = useState(false)
 
   useEffect(() => {
+    // Check if we're in development mode
+    setIsDevelopment(
+      window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname.includes("vercel.app"),
+    )
+
     loadSettings()
+  }, [])
+
+  // Check for error or success in URL params when component mounts
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const errorParam = urlParams.get("error")
+    const errorDescription = urlParams.get("error_description")
+    const errorDebug = urlParams.get("error_debug")
+    const success = urlParams.get("success")
+
+    if (errorParam) {
+      const errorMessage = errorDescription || "Unknown error"
+      setError(`${errorParam}: ${errorMessage}`)
+      setDebugInfo(errorDebug || null)
+
+      toast({
+        title: "Connection failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } else if (success) {
+      toast({
+        title: "Connected to Instagram",
+        description: "Your Instagram account has been successfully connected.",
+      })
+      // Reload settings to get the updated connection status
+      loadSettings()
+    }
+
+    // Clean up URL params
+    if (errorParam || success) {
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, document.title, newUrl)
+    }
   }, [])
 
   const loadSettings = async () => {
     try {
       setLoading(true)
-      // Get Instagram settings from the database
-      const data = await getInstagramFromDB()
+      setError(null)
+      // Get Instagram settings from the server
+      const data = await getInstagramSettings()
       setSettings({
         connected: data.connected,
         accountName: data.accountName,
@@ -43,6 +87,8 @@ export default function InstagramSettings() {
       })
     } catch (error) {
       console.error("Failed to load Instagram settings:", error)
+      setError(error instanceof Error ? error.message : "Failed to load Instagram settings. Please try again.")
+
       toast({
         title: "Error loading settings",
         description: "Could not load your Instagram settings. Please try again.",
@@ -56,42 +102,20 @@ export default function InstagramSettings() {
   const handleConnect = async () => {
     try {
       setConnecting(true)
+      setError(null)
+      setDebugInfo(null)
 
-      // Use the mock authentication function
-      const result = await mockInstagramAuth()
-
-      if (result.success && result.account) {
-        // Update the database with the mock account info
-        await updateInstagramInDB({
-          connected: true,
-          accountName: result.account.username,
-          accountId: result.account.id,
-          profilePicture: result.account.profilePicture,
-        })
-
-        // Update the local state
-        setSettings({
-          connected: true,
-          accountName: result.account.username,
-          accountId: result.account.id,
-          profilePicture: result.account.profilePicture,
-        })
-
-        toast({
-          title: "Connected to Instagram",
-          description: `Successfully connected to @${result.account.username}.`,
-        })
-      } else {
-        throw new Error(result.error || "Failed to connect to Instagram")
-      }
+      // Redirect to the Instagram auth endpoint
+      window.location.href = "/api/auth/instagram"
     } catch (error) {
-      console.error("Failed to connect Instagram:", error)
+      console.error("Failed to initiate Instagram connection:", error)
+      setError(error instanceof Error ? error.message : "Failed to initiate Instagram connection. Please try again.")
+
       toast({
         title: "Connection failed",
         description: "Could not connect to Instagram. Please try again.",
         variant: "destructive",
       })
-    } finally {
       setConnecting(false)
     }
   }
@@ -101,20 +125,14 @@ export default function InstagramSettings() {
 
     try {
       setDisconnecting(true)
-
-      // Update the database
-      await updateInstagramInDB({
-        connected: false,
-        accountName: "",
-        accountId: "",
-        profilePicture: "",
-      })
+      await disconnectInstagram()
 
       // Update the local state
       setSettings({
         connected: false,
         accountName: "",
         accountId: "",
+        profilePicture: "",
       })
 
       toast({
@@ -123,6 +141,8 @@ export default function InstagramSettings() {
       })
     } catch (error) {
       console.error("Failed to disconnect Instagram:", error)
+      setError(error instanceof Error ? error.message : "Failed to disconnect Instagram. Please try again.")
+
       toast({
         title: "Disconnect failed",
         description: "Could not disconnect from Instagram. Please try again.",
@@ -140,6 +160,9 @@ export default function InstagramSettings() {
           <CardTitle>Instagram Settings</CardTitle>
           <CardDescription>Loading your Instagram settings...</CardDescription>
         </CardHeader>
+        <CardContent className="flex justify-center py-6">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </CardContent>
       </Card>
     )
   }
@@ -147,10 +170,42 @@ export default function InstagramSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Instagram Settings</CardTitle>
+        <CardTitle className="flex items-center justify-between">
+          Instagram Settings
+          <Button variant="ghost" size="sm" onClick={loadSettings} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </CardTitle>
         <CardDescription>Connect your Instagram business account for automatic posting</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {isDevelopment && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-800">Development Mode</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              You're running in development mode. A mock Instagram connection will be used instead of the real Instagram
+              API. This allows you to test the app without a real Instagram business account.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Connection Error</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>{error}</p>
+              {debugInfo && (
+                <details className="text-xs mt-2">
+                  <summary>Technical Details</summary>
+                  <pre className="mt-2 whitespace-pre-wrap bg-destructive/10 p-2 rounded">{debugInfo}</pre>
+                </details>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {settings.connected ? (
           <div className="space-y-4">
             <div className="flex items-center p-4 bg-muted rounded-lg">
@@ -165,7 +220,9 @@ export default function InstagramSettings() {
               )}
               <div>
                 <p className="font-medium">Connected to Instagram</p>
-                <p className="text-sm text-muted-foreground">@{settings.accountName}</p>
+                <p className="text-sm text-muted-foreground">
+                  @{settings.accountName} {isDevelopment && "(Mock)"}
+                </p>
               </div>
             </div>
 
@@ -174,12 +231,22 @@ export default function InstagramSettings() {
               <AlertTitle className="text-green-800">Ready to Post</AlertTitle>
               <AlertDescription className="text-green-700">
                 Your Instagram account is connected and ready for automatic posting.
+                {isDevelopment && " (Note: Posts will be simulated in development mode)"}
               </AlertDescription>
             </Alert>
 
             <Button variant="destructive" className="w-full" onClick={handleDisconnect} disabled={disconnecting}>
-              <Unlink className="mr-2 h-4 w-4" />
-              Disconnect Instagram Account
+              {disconnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Disconnecting...
+                </>
+              ) : (
+                <>
+                  <Unlink className="mr-2 h-4 w-4" />
+                  Disconnect Instagram Account
+                </>
+              )}
             </Button>
           </div>
         ) : (
@@ -189,24 +256,31 @@ export default function InstagramSettings() {
               <p className="font-medium">Not Connected</p>
               <p className="text-sm text-muted-foreground">
                 Connect your Instagram business account to enable automatic posting
+                {isDevelopment && " (Mock account will be used in development)"}
               </p>
             </div>
 
-            <Alert>
-              <AlertTitle>Demo Mode</AlertTitle>
-              <AlertDescription>
-                This is a demo implementation. In a production environment, you would connect to the actual Instagram
-                API.
-              </AlertDescription>
-            </Alert>
+            {!isDevelopment && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Instagram Business Account Required</AlertTitle>
+                <AlertDescription>
+                  You need a Facebook Page with an associated Instagram Business account to use this feature. Personal
+                  Instagram accounts are not supported by Instagram's API for content publishing.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <Button variant="default" className="w-full" onClick={handleConnect} disabled={connecting}>
               {connecting ? (
-                "Connecting..."
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
               ) : (
                 <>
                   <Link className="mr-2 h-4 w-4" />
-                  Connect Instagram Account (Demo)
+                  Connect Instagram Account {isDevelopment && "(Mock)"}
                 </>
               )}
             </Button>

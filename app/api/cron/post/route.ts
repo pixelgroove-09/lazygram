@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getScheduledImagesFromDB, getScheduleFromDB, markImageAsPosted, getInstagramFromDB } from "@/lib/db"
+import { postToInstagram, validateToken } from "@/lib/instagram"
 import { mockPostToInstagram } from "@/lib/instagram-mock"
 
 export const dynamic = "force-dynamic"
@@ -28,6 +29,23 @@ export async function GET() {
       })
     }
 
+    // Check if we should use mock mode
+    const useMock = process.env.NODE_ENV === "development" || process.env.USE_MOCK_INSTAGRAM === "true"
+
+    // If not using mock, validate the token
+    if (!useMock) {
+      // Validate the access token
+      const isTokenValid = await validateToken(instagramAccount.accessToken)
+
+      if (!isTokenValid) {
+        return NextResponse.json({
+          success: false,
+          message: "Instagram access token is invalid or expired",
+          posted: 0,
+        })
+      }
+    }
+
     // Get scheduled images that are due to be posted
     const scheduledImages = await getScheduledImagesFromDB()
     const now = new Date()
@@ -50,27 +68,48 @@ export async function GET() {
     const imageToPost = dueImages[0]
 
     // Format caption with hashtags
-    const caption = `${imageToPost.caption}
+    const caption = `${imageToPost.caption}\n\n${imageToPost.hashtags.join(" ")}`
 
-${imageToPost.hashtags.join(" ")}`
+    try {
+      let postId
 
-    // Use the mock function to simulate posting to Instagram
-    const result = await mockPostToInstagram(imageToPost.url, caption)
+      if (useMock) {
+        console.log("Using mock Instagram posting for scheduled post")
+        const mockResult = await mockPostToInstagram(imageToPost.url, caption)
 
-    if (!result.success) {
-      throw new Error(result.error || "Failed to post to Instagram")
+        if (!mockResult.success) {
+          throw new Error(mockResult.error || "Mock posting failed")
+        }
+
+        postId = mockResult.postId
+      } else {
+        // Post to Instagram using the Graph API
+        postId = await postToInstagram(
+          instagramAccount.accessToken,
+          instagramAccount.accountId,
+          imageToPost.url,
+          caption,
+        )
+      }
+
+      // Mark the image as posted
+      await markImageAsPosted(imageToPost.id)
+
+      return NextResponse.json({
+        success: true,
+        message: useMock ? "Posted to Instagram successfully (mock)" : "Posted to Instagram successfully",
+        posted: 1,
+        imageId: imageToPost.id,
+        postId: postId,
+      })
+    } catch (postError) {
+      console.error("Error posting to Instagram:", postError)
+      return NextResponse.json({
+        success: false,
+        message: `Failed to post to Instagram: ${postError.message}`,
+        posted: 0,
+      })
     }
-
-    // Mark the image as posted
-    await markImageAsPosted(imageToPost.id)
-
-    return NextResponse.json({
-      success: true,
-      message: "Posted to Instagram successfully",
-      posted: 1,
-      imageId: imageToPost.id,
-      postId: result.postId,
-    })
   } catch (error) {
     console.error("Cron job error:", error)
     return NextResponse.json({ error: "Failed to run cron job" }, { status: 500 })

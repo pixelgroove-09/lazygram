@@ -1,10 +1,12 @@
 import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
+import AppLayout from "@/components/layout/app-layout"
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
+  title: "Lazygram - Instagram Automation",
+  description: "Automate your Instagram posting with AI-generated captions",
   generator: "v0.dev",
 }
 
@@ -15,15 +17,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="light">
+          <AppLayout>{children}</AppLayout>
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
-
-// Add these environment variables to your .env file or Vercel project:
-// INSTAGRAM_APP_ID - Your Facebook App ID
-// INSTAGRAM_APP_SECRET - Your Facebook App Secret
-// NEXT_PUBLIC_APP_URL - Your app's URL (e.g., https://your-app.vercel.app)
 
 
 

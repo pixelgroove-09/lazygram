@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
 
     if (!code) {
       console.error("No code provided in callback")
-      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_code`)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_code&error_description=${encodeURIComponent("No authorization code received from Instagram")}`,
+      )
     }
 
     console.log("Code received, exchanging for token")
@@ -44,7 +46,9 @@ export async function GET(request: NextRequest) {
 
       if (instagramAccounts.length === 0) {
         console.error("No Instagram business accounts found")
-        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_business_account`)
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_business_account&error_description=${encodeURIComponent("No Instagram business accounts found. Please connect an Instagram business account to your Facebook page.")}`,
+        )
       }
 
       // Use the first Instagram business account
@@ -64,16 +68,34 @@ export async function GET(request: NextRequest) {
 
       // Redirect back to the settings page
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`)
-    } catch (tokenError) {
+    } catch (tokenError: any) {
       console.error("Error during token exchange:", tokenError)
+
+      // Create a more detailed error message
+      const errorMessage = tokenError.message || "Failed to exchange authorization code for token"
+      const errorDebug = JSON.stringify({
+        message: tokenError.message,
+        stack: tokenError.stack,
+        name: tokenError.name,
+      })
+
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=token_exchange_failed&error_description=${encodeURIComponent(tokenError.message)}`,
+        `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=token_exchange_failed&error_description=${encodeURIComponent(errorMessage)}&error_debug=${encodeURIComponent(errorDebug)}`,
       )
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Instagram callback error:", error)
+
+    // Create a more detailed error message
+    const errorMessage = error.message || "Authentication failed"
+    const errorDebug = JSON.stringify({
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    })
+
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=auth_failed&error_description=${encodeURIComponent(error.message)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=auth_failed&error_description=${encodeURIComponent(errorMessage)}&error_debug=${encodeURIComponent(errorDebug)}`,
     )
   }
 }

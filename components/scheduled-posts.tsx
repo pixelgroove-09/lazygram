@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Calendar, X, Edit, Save, Loader2 } from "lucide-react"
+import { Calendar, X, Edit, Save, Loader2, Instagram, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/use-toast"
 import { getScheduledImages, unscheduleImage, scheduleImage } from "@/app/actions/image-actions"
+import { getInstagramSettings } from "@/app/actions/instagram-actions"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 interface ScheduledImage {
   id: string
@@ -26,15 +28,28 @@ interface ScheduledImage {
   scheduledTime: string
 }
 
+interface InstagramSettings {
+  connected: boolean
+  accountName: string
+  accountId: string
+}
+
 export default function ScheduledPosts() {
   const [scheduledImages, setScheduledImages] = useState<ScheduledImage[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editedScheduledTime, setEditedScheduledTime] = useState("")
   const [saving, setSaving] = useState(false)
+  const [instagramSettings, setInstagramSettings] = useState<InstagramSettings>({
+    connected: false,
+    accountName: "",
+    accountId: "",
+  })
+  const [loadingInstagram, setLoadingInstagram] = useState(true)
 
   useEffect(() => {
     loadScheduledImages()
+    loadInstagramSettings()
   }, [])
 
   const loadScheduledImages = async () => {
@@ -51,6 +66,22 @@ export default function ScheduledPosts() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadInstagramSettings = async () => {
+    try {
+      setLoadingInstagram(true)
+      const settings = await getInstagramSettings()
+      setInstagramSettings({
+        connected: settings.connected,
+        accountName: settings.accountName,
+        accountId: settings.accountId,
+      })
+    } catch (error) {
+      console.error("Failed to load Instagram settings:", error)
+    } finally {
+      setLoadingInstagram(false)
     }
   }
 
@@ -122,7 +153,7 @@ export default function ScheduledPosts() {
     }).format(date)
   }
 
-  if (loading) {
+  if (loading || loadingInstagram) {
     return (
       <Card>
         <CardHeader>
@@ -145,56 +176,64 @@ export default function ScheduledPosts() {
     )
   }
 
-  if (scheduledImages.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Scheduled Posts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-6">
-            <p className="text-muted-foreground">No posts scheduled yet.</p>
-            <p className="text-sm text-muted-foreground mt-1">Upload images and schedule them to appear here.</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Scheduled Posts</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {scheduledImages.map((image) => (
-            <div key={image.id} className="flex items-center space-x-4 border-b pb-4 last:border-0 last:pb-0">
-              <div className="h-16 w-16 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                <img
-                  src={image.url || "/placeholder.svg"}
-                  alt="Scheduled post"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium line-clamp-1">{image.caption}</p>
-                <div className="flex items-center mt-1 text-xs text-muted-foreground">
-                  <Calendar className="h-3 w-3 mr-1" />
-                  <span>{formatScheduledTime(image.scheduledTime)}</span>
+        {!instagramSettings.connected && (
+          <Alert className="mb-6" variant="warning">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Instagram Not Connected</AlertTitle>
+            <AlertDescription>
+              Your Instagram account is not connected. Scheduled posts will not be published automatically until you
+              connect your Instagram account in Settings.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {scheduledImages.length === 0 ? (
+          <div className="text-center py-6">
+            <p className="text-muted-foreground">No posts scheduled yet.</p>
+            <p className="text-sm text-muted-foreground mt-1">Upload images and schedule them to appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {scheduledImages.map((image) => (
+              <div key={image.id} className="flex items-center space-x-4 border-b pb-4 last:border-0 last:pb-0">
+                <div className="h-16 w-16 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                  <img
+                    src={image.url || "/placeholder.svg"}
+                    alt="Scheduled post"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium line-clamp-1">{image.caption}</p>
+                  <div className="flex items-center mt-1 text-xs text-muted-foreground">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    <span>{formatScheduledTime(image.scheduledTime)}</span>
+                  </div>
+                  {instagramSettings.connected && (
+                    <div className="flex items-center mt-1 text-xs text-green-600">
+                      <Instagram className="h-3 w-3 mr-1" />
+                      <span>Will post to @{instagramSettings.accountName}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditSchedule(image)}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleUnschedule(image.id)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-              <div className="flex space-x-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditSchedule(image)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleUnschedule(image.id)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Edit Schedule Dialog */}
         <Dialog open={editingId !== null} onOpenChange={(open) => !open && setEditingId(null)}>
@@ -213,6 +252,15 @@ export default function ScheduledPosts() {
                   onChange={(e) => setEditedScheduledTime(e.target.value)}
                 />
               </div>
+              {!instagramSettings.connected && (
+                <Alert variant="warning">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Instagram Not Connected</AlertTitle>
+                  <AlertDescription>
+                    Your Instagram account is not connected. This post will not be published automatically.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditingId(null)} disabled={saving}>
