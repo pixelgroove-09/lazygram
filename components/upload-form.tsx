@@ -3,35 +3,17 @@
 import type React from "react"
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Upload, ImagePlus, X, AlertCircle, Save, Trash2, Loader2 } from "lucide-react"
+import { Upload, ImagePlus, X, AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/components/ui/use-toast"
 import { analyzeAndSaveImage, scheduleImage } from "@/app/actions/image-actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { getSavedPrompts, savePrompt, deletePrompt } from "@/app/actions/prompt-actions"
-import { Input } from "@/components/ui/input"
+import { getSavedPrompts } from "@/app/actions/prompt-actions"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { calculateNextAvailableSlots } from "@/lib/schedule-utils"
 import { useGallery } from "@/contexts/gallery-context"
 
@@ -45,14 +27,13 @@ interface SavedPrompt {
 export default function UploadForm() {
   const router = useRouter()
   const [files, setFiles] = useState<File[]>([])
-  const [prompt, setPrompt] = useState("")
+  const [selectedPromptId, setSelectedPromptId] = useState<string>("")
+  const [promptText, setPromptText] = useState("")
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({})
   const [uploadStatus, setUploadStatus] = useState<{ [key: string]: string }>({})
   const [dragActive, setDragActive] = useState(false)
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([])
-  const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false)
-  const [promptName, setPromptName] = useState("")
   const [loadingSavedPrompts, setLoadingSavedPrompts] = useState(true)
   const [autoSchedule, setAutoSchedule] = useState(true)
 
@@ -67,10 +48,16 @@ export default function UploadForm() {
       setLoadingSavedPrompts(true)
       const prompts = await getSavedPrompts()
       setSavedPrompts(prompts)
+
+      // If there are prompts, select the first one by default
+      if (prompts.length > 0) {
+        setSelectedPromptId(prompts[0].id)
+        setPromptText(prompts[0].prompt)
+      }
     } catch (error) {
       console.error("Failed to load saved prompts:", error)
       toast({
-        title: "Error loading saved prompts",
+        title: "Error loading prompts",
         description: "Could not load your saved prompts. Please try again.",
         variant: "destructive",
       })
@@ -79,71 +66,12 @@ export default function UploadForm() {
     }
   }
 
-  const handleSavePrompt = async () => {
-    try {
-      if (!promptName.trim()) {
-        toast({
-          title: "Name required",
-          description: "Please provide a name for your prompt.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!prompt.trim()) {
-        toast({
-          title: "Prompt required",
-          description: "Please provide a prompt to save.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      await savePrompt(promptName, prompt)
-      await loadSavedPrompts()
-
-      setSavePromptDialogOpen(false)
-      setPromptName("")
-
-      toast({
-        title: "Prompt saved",
-        description: "Your prompt has been saved for future use.",
-      })
-    } catch (error) {
-      console.error("Failed to save prompt:", error)
-      toast({
-        title: "Save failed",
-        description: "Could not save your prompt. Please try again.",
-        variant: "destructive",
-      })
+  const handlePromptChange = (promptId: string) => {
+    const selectedPrompt = savedPrompts.find((p) => p.id === promptId)
+    if (selectedPrompt) {
+      setSelectedPromptId(promptId)
+      setPromptText(selectedPrompt.prompt)
     }
-  }
-
-  const handleDeletePrompt = async (id: string) => {
-    try {
-      await deletePrompt(id)
-      await loadSavedPrompts()
-
-      toast({
-        title: "Prompt deleted",
-        description: "Your saved prompt has been deleted.",
-      })
-    } catch (error) {
-      console.error("Failed to delete prompt:", error)
-      toast({
-        title: "Delete failed",
-        description: "Could not delete your prompt. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleSelectPrompt = (selectedPrompt: SavedPrompt) => {
-    setPrompt(selectedPrompt.prompt)
-    toast({
-      title: "Prompt selected",
-      description: `"${selectedPrompt.name}" has been loaded.`,
-    })
   }
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -216,7 +144,7 @@ export default function UploadForm() {
       await analyzeAndSaveImage({
         id: result.id,
         url: result.url,
-        prompt,
+        prompt: promptText,
       })
 
       // Update progress to 100%
@@ -252,10 +180,10 @@ export default function UploadForm() {
       return
     }
 
-    if (!prompt.trim()) {
+    if (!promptText) {
       toast({
-        title: "No prompt provided",
-        description: "Please provide a thematic prompt for caption generation.",
+        title: "No prompt selected",
+        description: "Please select a thematic prompt for caption generation.",
         variant: "destructive",
       })
       return
@@ -352,105 +280,43 @@ export default function UploadForm() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Upload Images</CardTitle>
-        <CardDescription>Upload multiple images to generate captions with AI</CardDescription>
-      </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Thematic Prompt Section */}
-          <div className="space-y-2">
+          {/* Prompt Selection */}
+          <div className="space-y-2 pt-6">
             <div className="flex items-center justify-between">
-              <Label htmlFor="prompt" className="text-sm font-medium">
-                Thematic Prompt
+              <Label htmlFor="prompt-select" className="text-sm font-medium">
+                Select Thematic Prompt
               </Label>
-
-              <div className="flex items-center space-x-2">
-                <Dialog open={savePromptDialogOpen} onOpenChange={setSavePromptDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={!prompt.trim() || uploading}>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Prompt
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Save Prompt</DialogTitle>
-                      <DialogDescription>Give your prompt a name so you can reuse it later.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="prompt-name">Prompt Name</Label>
-                        <Input
-                          id="prompt-name"
-                          placeholder="e.g., Professional Business, Travel Adventure"
-                          value={promptName}
-                          onChange={(e) => setPromptName(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="prompt-preview">Prompt</Label>
-                        <Textarea id="prompt-preview" value={prompt} readOnly className="min-h-[100px] bg-muted" />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setSavePromptDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleSavePrompt}>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" disabled={savedPrompts.length === 0 || uploading}>
-                      Saved Prompts
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[300px]">
-                    <DropdownMenuLabel>Select a Saved Prompt</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {loadingSavedPrompts ? (
-                      <div className="p-2 text-center text-sm text-muted-foreground">Loading saved prompts...</div>
-                    ) : savedPrompts.length === 0 ? (
-                      <div className="p-2 text-center text-sm text-muted-foreground">No saved prompts yet</div>
-                    ) : (
-                      savedPrompts.map((savedPrompt) => (
-                        <DropdownMenuItem key={savedPrompt.id} className="flex justify-between items-center">
-                          <div className="flex-1 cursor-pointer" onClick={() => handleSelectPrompt(savedPrompt)}>
-                            <span className="font-medium">{savedPrompt.name}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeletePrompt(savedPrompt.id)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </DropdownMenuItem>
-                      ))
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <Button variant="outline" size="sm" onClick={() => router.push("/settings?tab=prompts")} type="button">
+                Manage Prompts
+              </Button>
             </div>
 
-            <Textarea
-              id="prompt"
-              placeholder="Describe the theme or style for your captions (e.g., 'Professional business content with motivational quotes' or 'Casual travel photos with fun facts')"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="min-h-[100px]"
-              disabled={uploading}
-            />
+            {loadingSavedPrompts ? (
+              <div className="h-10 bg-muted animate-pulse rounded-md"></div>
+            ) : savedPrompts.length === 0 ? (
+              <Alert variant="warning">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>No prompts available</AlertTitle>
+                <AlertDescription>
+                  Please create a thematic prompt in Settings before uploading images.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Select value={selectedPromptId} onValueChange={handlePromptChange} disabled={uploading}>
+                <SelectTrigger id="prompt-select">
+                  <SelectValue placeholder="Select a thematic prompt" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedPrompts.map((prompt) => (
+                    <SelectItem key={prompt.id} value={prompt.id}>
+                      {prompt.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Auto-schedule option */}
@@ -459,6 +325,7 @@ export default function UploadForm() {
               id="auto-schedule"
               checked={autoSchedule}
               onCheckedChange={(checked) => setAutoSchedule(checked as boolean)}
+              disabled={uploading}
             />
             <Label htmlFor="auto-schedule" className="text-sm font-medium cursor-pointer">
               Auto-schedule posts based on your frequency settings
@@ -554,7 +421,7 @@ export default function UploadForm() {
         <Button
           type="submit"
           className="w-full"
-          disabled={uploading || files.length === 0 || !prompt.trim()}
+          disabled={uploading || files.length === 0 || !promptText || savedPrompts.length === 0}
           onClick={handleSubmit}
         >
           {uploading ? (

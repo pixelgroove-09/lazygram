@@ -3,7 +3,7 @@ interface PageHeaderProps {
   description?: string
 }
 
-export default function PageHeader({ title, description }: PageHeaderProps) {
+export function PageHeader({ title, description }: PageHeaderProps) {
   return (
     <div className="mb-6">
       <h1 className="text-3xl font-bold">{title}</h1>
@@ -11,4 +11,7 @@ export default function PageHeader({ title, description }: PageHeaderProps) {
     </div>
   )
 }
+
+// Add a default export that points to the named export
+export default PageHeader
 

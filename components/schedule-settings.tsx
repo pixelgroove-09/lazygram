@@ -35,6 +35,7 @@ export default function ScheduleSettings() {
     loadSettings()
   }, [])
 
+  // Update the loadSettings function
   const loadSettings = async () => {
     try {
       setLoading(true)
@@ -54,6 +55,7 @@ export default function ScheduleSettings() {
     }
   }
 
+  // Update the handleSave function
   const handleSave = async () => {
     try {
       setSaving(true)

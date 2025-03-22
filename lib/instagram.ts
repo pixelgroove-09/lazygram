@@ -1,3 +1,5 @@
+// lib/instagram.ts
+
 interface InstagramTokens {
   accessToken: string
   userID: string
@@ -13,6 +15,46 @@ interface InstagramAccount {
   isBusinessAccount: boolean
 }
 
+/**
+ * Validates if an Instagram token is still valid
+ */
+export async function validateToken(accessToken: string): Promise<boolean> {
+  try {
+    if (!accessToken) {
+      console.log("No access token provided for validation")
+      return false
+    }
+
+    console.log("Validating Instagram access token")
+    const url = `https://graph.facebook.com/v18.0/debug_token?input_token=${accessToken}&access_token=${accessToken}`
+
+    const response = await fetch(url)
+    const data = await response.json()
+
+    console.log("Token validation response:", JSON.stringify(data, null, 2))
+
+    // Check if the token is valid and not expired
+    if (response.ok && data.data && data.data.is_valid) {
+      // Check expiration (if available)
+      if (data.data.expires_at && data.data.expires_at < Math.floor(Date.now() / 1000)) {
+        console.log("Token expired")
+        return false
+      }
+      console.log("Token is valid")
+      return true
+    }
+
+    console.log("Token is invalid")
+    return false
+  } catch (error) {
+    console.error("Error validating token:", error)
+    return false
+  }
+}
+
+/**
+ * Generates the Instagram authorization URL
+ */
 export async function getInstagramAuthUrl(): Promise<string> {
   try {
     // Check if environment variables are set
@@ -37,7 +79,10 @@ export async function getInstagramAuthUrl(): Promise<string> {
       "business_management",
     ].join(",")
 
-    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${process.env.INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code`
+    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${
+      process.env.INSTAGRAM_APP_ID
+    }&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code`
+
     console.log("Auth URL generated:", authUrl)
 
     return authUrl
@@ -47,6 +92,9 @@ export async function getInstagramAuthUrl(): Promise<string> {
   }
 }
 
+/**
+ * Exchanges an authorization code for an access token
+ */
 export async function exchangeCodeForToken(code: string): Promise<InstagramTokens> {
   try {
     // Check if environment variables are set
@@ -77,23 +125,24 @@ export async function exchangeCodeForToken(code: string): Promise<InstagramToken
       `${url}?${params.toString().replace(process.env.INSTAGRAM_APP_SECRET, "REDACTED")}`,
     )
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-
-    const responseText = await response.text()
-    console.log("Response status:", response.status)
+    const response = await fetch(`${url}?${params.toString()}`)
 
     if (!response.ok) {
+      const errorData = await response.text()
       console.error("Failed to exchange code for token. Status:", response.status)
-      console.error("Response:", responseText)
-      throw new Error(`Failed to exchange code for token: ${responseText}`)
+      console.error("Response:", errorData)
+
+      try {
+        // Try to parse as JSON to get more detailed error
+        const errorJson = JSON.parse(errorData)
+        throw new Error(`Failed to exchange code for token: ${errorJson.error?.message || errorData}`)
+      } catch (e) {
+        // If JSON parsing fails, use the raw error
+        throw new Error(`Failed to exchange code for token: ${errorData}`)
+      }
     }
 
-    const data = JSON.parse(responseText)
+    const data = await response.json()
     console.log("Token exchange successful")
 
     return {
@@ -108,6 +157,9 @@ export async function exchangeCodeForToken(code: string): Promise<InstagramToken
   }
 }
 
+/**
+ * Exchanges a short-lived token for a long-lived token (60 days)
+ */
 export async function getLongLivedToken(shortLivedToken: string): Promise<string> {
   try {
     // Check if environment variables are set
@@ -127,19 +179,22 @@ export async function getLongLivedToken(shortLivedToken: string): Promise<string
 
     console.log("Making request to get long-lived token")
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      method: "GET",
-    })
-
-    const responseText = await response.text()
+    const response = await fetch(`${url}?${params.toString()}`)
 
     if (!response.ok) {
+      const errorData = await response.text()
       console.error("Failed to get long-lived token. Status:", response.status)
-      console.error("Response:", responseText)
-      throw new Error(`Failed to get long-lived token: ${responseText}`)
+      console.error("Response:", errorData)
+
+      try {
+        const errorJson = JSON.parse(errorData)
+        throw new Error(`Failed to get long-lived token: ${errorJson.error?.message || errorData}`)
+      } catch (e) {
+        throw new Error(`Failed to get long-lived token: ${errorData}`)
+      }
     }
 
-    const data = JSON.parse(responseText)
+    const data = await response.json()
     console.log("Long-lived token obtained successfully")
 
     return data.access_token
@@ -149,6 +204,9 @@ export async function getLongLivedToken(shortLivedToken: string): Promise<string
   }
 }
 
+/**
+ * Gets the user's Instagram business accounts
+ */
 export async function getInstagramBusinessAccounts(accessToken: string): Promise<InstagramAccount[]> {
   try {
     console.log("Getting Instagram business accounts")
@@ -158,16 +216,26 @@ export async function getInstagramBusinessAccounts(accessToken: string): Promise
 
     console.log("Fetching Facebook pages")
     const pagesResponse = await fetch(pagesUrl)
-    const pagesResponseText = await pagesResponse.text()
 
     if (!pagesResponse.ok) {
+      const errorData = await pagesResponse.text()
       console.error("Failed to get Facebook pages. Status:", pagesResponse.status)
-      console.error("Response:", pagesResponseText)
-      throw new Error(`Failed to get Facebook pages: ${pagesResponseText}`)
+      console.error("Response:", errorData)
+
+      try {
+        const errorJson = JSON.parse(errorData)
+        throw new Error(`Failed to get Facebook pages: ${errorJson.error?.message || errorData}`)
+      } catch (e) {
+        throw new Error(`Failed to get Facebook pages: ${errorData}`)
+      }
     }
 
-    const pagesData = JSON.parse(pagesResponseText)
+    const pagesData = await pagesResponse.json()
     console.log(`Found ${pagesData.data.length} Facebook pages`)
+
+    if (!pagesData.data || pagesData.data.length === 0) {
+      throw new Error("No Facebook pages found. You need a Facebook page connected to your Instagram business account.")
+    }
 
     // For each page, check if it has an Instagram Business account
     const instagramAccounts: InstagramAccount[] = []
@@ -178,24 +246,41 @@ export async function getInstagramBusinessAccounts(accessToken: string): Promise
       const igAccountUrl = `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account{id,name,username,profile_picture_url}&access_token=${accessToken}`
 
       const igResponse = await fetch(igAccountUrl)
-      const igResponseText = await igResponse.text()
 
       if (!igResponse.ok) {
         console.warn(`Failed to get Instagram account for page ${page.name}. Status:`, igResponse.status)
-        console.warn("Response:", igResponseText)
+        const errorData = await igResponse.text()
+        console.warn("Response:", errorData)
         continue
       }
 
-      const igData = JSON.parse(igResponseText)
+      const igData = await igResponse.json()
 
       if (igData.instagram_business_account) {
         console.log(`Found Instagram business account for page ${page.name}`)
+
+        // Get profile picture if it's not included in the response
+        let profilePic = igData.instagram_business_account.profile_picture_url || ""
+
+        if (!profilePic && igData.instagram_business_account.id) {
+          try {
+            const profileResponse = await fetch(
+              `https://graph.facebook.com/v18.0/${igData.instagram_business_account.id}?fields=profile_picture_url&access_token=${accessToken}`,
+            )
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json()
+              profilePic = profileData.profile_picture_url || ""
+            }
+          } catch (error) {
+            console.warn("Failed to fetch profile picture", error)
+          }
+        }
 
         instagramAccounts.push({
           id: igData.instagram_business_account.id,
           name: igData.instagram_business_account.name || page.name,
           username: igData.instagram_business_account.username || "",
-          profilePicture: igData.instagram_business_account.profile_picture_url || "",
+          profilePicture: profilePic,
           isBusinessAccount: true,
         })
       } else {
@@ -204,6 +289,13 @@ export async function getInstagramBusinessAccounts(accessToken: string): Promise
     }
 
     console.log(`Found ${instagramAccounts.length} Instagram business accounts`)
+
+    if (instagramAccounts.length === 0) {
+      throw new Error(
+        "No Instagram business accounts found. Make sure your Instagram account is a business account and connected to your Facebook page.",
+      )
+    }
+
     return instagramAccounts
   } catch (error) {
     console.error("Error getting Instagram business accounts:", error)
@@ -211,6 +303,9 @@ export async function getInstagramBusinessAccounts(accessToken: string): Promise
   }
 }
 
+/**
+ * Posts an image to Instagram
+ */
 export async function postToInstagram(
   accessToken: string,
   instagramAccountId: string,
@@ -237,15 +332,22 @@ export async function postToInstagram(
       method: "POST",
     })
 
-    const containerResponseText = await containerResponse.text()
-
     if (!containerResponse.ok) {
+      const errorData = await containerResponse.text()
       console.error("Failed to create media container. Status:", containerResponse.status)
-      console.error("Response:", containerResponseText)
-      throw new Error(`Failed to create media container: ${containerResponseText}`)
+      console.error("Response:", errorData)
+
+      try {
+        const errorJson = JSON.parse(errorData)
+        // Extract useful error info from Facebook's error response
+        const errorMsg = errorJson.error?.message || errorJson.error?.error_user_msg || errorData
+        throw new Error(`Failed to create media container: ${errorMsg}`)
+      } catch (e) {
+        throw new Error(`Failed to create media container: ${errorData}`)
+      }
     }
 
-    const containerData = JSON.parse(containerResponseText)
+    const containerData = await containerResponse.json()
     const containerId = containerData.id
     console.log("Media container created with ID:", containerId)
 
@@ -258,19 +360,29 @@ export async function postToInstagram(
     })
 
     console.log("Publishing media container")
+
+    // Wait a moment to ensure the container is ready (sometimes Instagram API needs a moment)
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
     const publishResponse = await fetch(`${publishUrl}?${publishParams.toString()}`, {
       method: "POST",
     })
 
-    const publishResponseText = await publishResponse.text()
-
     if (!publishResponse.ok) {
+      const errorData = await publishResponse.text()
       console.error("Failed to publish media. Status:", publishResponse.status)
-      console.error("Response:", publishResponseText)
-      throw new Error(`Failed to publish media: ${publishResponseText}`)
+      console.error("Response:", errorData)
+
+      try {
+        const errorJson = JSON.parse(errorData)
+        const errorMsg = errorJson.error?.message || errorJson.error?.error_user_msg || errorData
+        throw new Error(`Failed to publish media: ${errorMsg}`)
+      } catch (e) {
+        throw new Error(`Failed to publish media: ${errorData}`)
+      }
     }
 
-    const publishData = JSON.parse(publishResponseText)
+    const publishData = await publishResponse.json()
     console.log("Media published successfully with ID:", publishData.id)
 
     return publishData.id

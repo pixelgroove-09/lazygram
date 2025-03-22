@@ -6,99 +6,93 @@ interface ImageAnalysis {
 export async function analyzeImageWithClaude(imageUrl: string, prompt: string): Promise<ImageAnalysis> {
   try {
     console.log("Analyzing image with Claude API:", imageUrl)
+    
+    // 1. Download the image data
+    const imageResponse = await fetch(imageUrl)
+    const imageBuffer = await imageResponse.arrayBuffer()
+    const base64Image = Buffer.from(imageBuffer).toString('base64')
+    
+    // 2. Create the prompt for Claude using the template
+    const claudePrompt = `You are an expert Instagram content creator who crafts short, engaging captions that feel authentic and capture attention.
 
-    // For now, let's use a mock implementation that returns better captions
-    // This will simulate what Claude would return if it could analyze the image
+Analyze the image and create:
+1. A concise caption (30-60 words max) that:
+   * Has a casual, conversational tone
+   * Includes 1-2 fitting emojis naturally placed within the text
+   * Captures the mood/essence rather than describing the image in detail
+   * Ends with an engaging question or statement
+   * Avoids being overly descriptive or academic in tone
 
-    // In a real implementation, we would:
-    // 1. Download the image
-    // 2. Convert it to base64
-    // 3. Send it to Claude with the proper API call
-    // However, there are technical limitations in the current setup
+2. 4-5 relevant hashtags (no more) that will boost discovery
 
-    // Mock response based on common image types
-    const isBeach =
-      imageUrl.toLowerCase().includes("beach") ||
-      prompt.toLowerCase().includes("beach") ||
-      prompt.toLowerCase().includes("travel")
+[USER THEME PREFERENCES: ${prompt}]
 
-    const isFood =
-      imageUrl.toLowerCase().includes("food") ||
-      prompt.toLowerCase().includes("food") ||
-      prompt.toLowerCase().includes("cuisine")
+Examples of good captions:
+- "Paradise from above ✨ Where Bali's emerald waters kiss the shore and umbrellas dot the sand like blooming flowers. Hidden beach gems like this are what make the Island of Gods truly magical. #BaliLife #IslandParadise #DroneViews #HiddenBeaches #ExploreBali"
 
-    const isNature =
-      imageUrl.toLowerCase().includes("nature") ||
-      prompt.toLowerCase().includes("nature") ||
-      prompt.toLowerCase().includes("landscape")
+- "Embracing the mist and each other 🌿 Nature's most precious bond captured in the wild. #MonkeyLove #WildlifeWonders #MistyMornings #MotherNature"
 
-    let mockCaption = ""
-    let mockHashtags: string[] = []
+Respond with:
+1. The Instagram caption (30-60 words max)
+2. Recommended hashtags (4-5 only)`
 
-    if (isBeach) {
-      mockCaption =
-        "Found the edge of paradise where turquoise waters meet golden sands. This hidden gem offers a serene escape from the everyday hustle. The climb down might be challenging, but that's the price of admission to this untouched slice of heaven. What's the most breathtaking beach you've ever had to work to reach?"
-      mockHashtags = [
-        "#BeachParadise",
-        "#HiddenGem",
-        "#TravelDeeper",
-        "#OceanViews",
-        "#IslandLife",
-        "#NaturalWonder",
-        "#TravelGoals",
-      ]
-    } else if (isFood) {
-      mockCaption =
-        "Savoring every bite of this culinary masterpiece. The perfect blend of flavors dancing on my palate, reminding me why food is the universal language of joy. Sometimes the simplest ingredients create the most extraordinary experiences. What's your favorite comfort food that takes you back to childhood?"
-      mockHashtags = [
-        "#FoodieLife",
-        "#CulinaryJourney",
-        "#FoodPhotography",
-        "#TasteTheWorld",
-        "#FoodLover",
-        "#GourmetExperience",
-        "#FoodStory",
-      ]
-    } else if (isNature) {
-      mockCaption =
-        "Lost in the embrace of nature's grandeur, where time stands still and worries fade away. This breathtaking landscape reminds us how small we are in the grand tapestry of the world. The perfect reminder to protect these wild spaces for generations to come. What natural wonder has left you speechless?"
-      mockHashtags = [
-        "#NatureTherapy",
-        "#WildernessExplorer",
-        "#LandscapeLovers",
-        "#EarthCaptures",
-        "#NaturalWonder",
-        "#OutdoorAdventure",
-        "#PlanetEarth",
-      ]
+    // 3. Call Claude API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.CLAUDE_API_KEY || '',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: "claude-3-opus-20240229",
+        max_tokens: 1000,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: claudePrompt
+              },
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ]
+      })
+    })
+    const result = await response.json()
+    
+    // 4. Parse Claude's response
+    // This assumes Claude responds in a structured format with caption and hashtags
+    const content = result.content[0].text
+    
+    // Simple parsing approach - assumes Claude returns caption followed by hashtags
+    const sections = content.split(/Recommended hashtags:|Hashtags:/i)
+    let caption = ''
+    let hashtags: string[] = []
+    
+    if (sections.length >= 2) {
+      caption = sections[0].trim()
+      // Extract hashtags, assuming they're listed with # symbols
+      const hashtagText = sections[1].trim()
+      hashtags = hashtagText.match(/#\w+/g) || []
     } else {
-      // Generic good caption
-      mockCaption =
-        "Moments like these remind us why we capture life through our lens. Behind every image is a story waiting to be told, an emotion waiting to be felt. What stories are you creating today? Let's inspire each other in the comments below."
-      mockHashtags = [
-        "#MomentsCaptured",
-        "#LifeInFocus",
-        "#VisualStories",
-        "#PerspectiveMatters",
-        "#CreativeVision",
-        "#DailyInspiration",
-        "#ArtOfLiving",
-      ]
+      // Fallback parsing if Claude doesn't follow the exact format
+      caption = content.replace(/#\w+/g, '').trim()
+      const hashtagMatches = content.match(/#\w+/g)
+      hashtags = hashtagMatches || []
     }
-
-    // Personalize based on prompt
-    if (prompt && prompt.length > 0) {
-      // Add a sentence that incorporates the user's thematic preference
-      const promptWords = prompt.split(" ").filter((word) => word.length > 3)
-      if (promptWords.length > 0) {
-        const randomWord = promptWords[Math.floor(Math.random() * promptWords.length)]
-        mockCaption += ` This is what ${randomWord.toLowerCase()} looks like when you follow your passion.`
-      }
-    }
-
     return {
-      caption: mockCaption,
-      hashtags: mockHashtags,
+      caption,
+      hashtags
     }
   } catch (error) {
     console.error("Error analyzing image with Claude:", error)

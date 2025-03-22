@@ -6,7 +6,7 @@ const createBrowserClient = () => {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error("Missing Supabase environment variables")
+    throw new Error("Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY")
   }
 
   return createClient(supabaseUrl, supabaseAnonKey)
@@ -24,17 +24,29 @@ export const getBrowserClient = () => {
 
 // Create a server client (for server components and server actions)
 export const createServerClient = () => {
-  const supabaseUrl = process.env.SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error("Missing Supabase environment variables")
+    if (!supabaseUrl) {
+      throw new Error("Missing Supabase environment variable: SUPABASE_URL")
+    }
+
+    if (!supabaseServiceKey) {
+      throw new Error("Missing Supabase environment variable: SUPABASE_SERVICE_ROLE_KEY")
+    }
+
+    return createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+      },
+    })
+  } catch (error) {
+    console.error("Error creating Supabase client:", error)
+    throw error
   }
-
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      persistSession: false,
-    },
-  })
 }
 

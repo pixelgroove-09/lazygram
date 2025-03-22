@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getInstagramSettings, disconnectInstagram } from "@/app/actions/instagram-actions"
+import InstagramDirectConnect from "@/components/instagram-direct-connect"
+import { useRouter } from "next/navigation"
+import { isMockModeEnabled } from "@/lib/config"
 
 interface InstagramSettings {
   connected: boolean
@@ -26,16 +29,12 @@ export default function InstagramSettings() {
   const [disconnecting, setDisconnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<string | null>(null)
-  const [isDevelopment, setIsDevelopment] = useState(false)
+  const [isMockMode, setIsMockMode] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    // Check if we're in development mode
-    setIsDevelopment(
-      window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1" ||
-        window.location.hostname.includes("vercel.app"),
-    )
-
+    // Check if we're in mock mode
+    setIsMockMode(isMockModeEnabled())
     loadSettings()
   }, [])
 
@@ -99,13 +98,13 @@ export default function InstagramSettings() {
     }
   }
 
-  const handleConnect = async () => {
+  const handleConnect = () => {
     try {
       setConnecting(true)
       setError(null)
       setDebugInfo(null)
 
-      // Redirect to the Instagram auth endpoint
+      // Direct browser navigation to the auth endpoint
       window.location.href = "/api/auth/instagram"
     } catch (error) {
       console.error("Failed to initiate Instagram connection:", error)
@@ -139,6 +138,9 @@ export default function InstagramSettings() {
         title: "Disconnected from Instagram",
         description: "Your Instagram account has been disconnected.",
       })
+
+      // Refresh the page to update the UI
+      router.refresh()
     } catch (error) {
       console.error("Failed to disconnect Instagram:", error)
       setError(error instanceof Error ? error.message : "Failed to disconnect Instagram. Please try again.")
@@ -151,6 +153,11 @@ export default function InstagramSettings() {
     } finally {
       setDisconnecting(false)
     }
+  }
+
+  const handleRefresh = () => {
+    loadSettings()
+    router.refresh()
   }
 
   if (loading) {
@@ -172,20 +179,31 @@ export default function InstagramSettings() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           Instagram Settings
-          <Button variant="ghost" size="sm" onClick={loadSettings} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </CardTitle>
         <CardDescription>Connect your Instagram business account for automatic posting</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {isDevelopment && (
+        {isMockMode && (
           <Alert className="bg-blue-50 border-blue-200">
             <Info className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-blue-800">Development Mode</AlertTitle>
+            <AlertTitle className="text-blue-800">Mock Mode Enabled</AlertTitle>
             <AlertDescription className="text-blue-700">
-              You're running in development mode. A mock Instagram connection will be used instead of the real Instagram
-              API. This allows you to test the app without a real Instagram business account.
+              You're using the mock Instagram integration. This allows you to test the app without a real Instagram
+              business account. All Instagram operations will be simulated.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!isMockMode && (
+          <Alert className="bg-green-50 border-green-200">
+            <Info className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-800">Live Mode Enabled</AlertTitle>
+            <AlertDescription className="text-green-700">
+              You're using the real Instagram API. Your posts will be published to your actual Instagram business
+              account.
             </AlertDescription>
           </Alert>
         )}
@@ -221,7 +239,7 @@ export default function InstagramSettings() {
               <div>
                 <p className="font-medium">Connected to Instagram</p>
                 <p className="text-sm text-muted-foreground">
-                  @{settings.accountName} {isDevelopment && "(Mock)"}
+                  @{settings.accountName} {isMockMode && "(Mock)"}
                 </p>
               </div>
             </div>
@@ -231,7 +249,7 @@ export default function InstagramSettings() {
               <AlertTitle className="text-green-800">Ready to Post</AlertTitle>
               <AlertDescription className="text-green-700">
                 Your Instagram account is connected and ready for automatic posting.
-                {isDevelopment && " (Note: Posts will be simulated in development mode)"}
+                {isMockMode && " (Note: Posts will be simulated in mock mode)"}
               </AlertDescription>
             </Alert>
 
@@ -256,11 +274,11 @@ export default function InstagramSettings() {
               <p className="font-medium">Not Connected</p>
               <p className="text-sm text-muted-foreground">
                 Connect your Instagram business account to enable automatic posting
-                {isDevelopment && " (Mock account will be used in development)"}
+                {isMockMode && " (Mock account will be used)"}
               </p>
             </div>
 
-            {!isDevelopment && (
+            {!isMockMode && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Instagram Business Account Required</AlertTitle>
@@ -280,10 +298,19 @@ export default function InstagramSettings() {
               ) : (
                 <>
                   <Link className="mr-2 h-4 w-4" />
-                  Connect Instagram Account {isDevelopment && "(Mock)"}
+                  Connect Instagram Account {isMockMode && "(Mock)"}
                 </>
               )}
             </Button>
+
+            {isMockMode && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-2">
+                  If the standard connection method doesn't work, try the direct connection:
+                </p>
+                <InstagramDirectConnect />
+              </div>
+            )}
           </div>
         )}
       </CardContent>
