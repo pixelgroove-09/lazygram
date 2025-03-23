@@ -1,8 +1,5 @@
-"use client"
-
-import { isToday } from "date-fns"
+import { format, isToday } from "date-fns"
 import { useDroppable } from "@dnd-kit/core"
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { ScheduledPostItem } from "./scheduled-post-item"
 
 interface CalendarDayProps {
@@ -10,6 +7,16 @@ interface CalendarDayProps {
   day: Date
   posts: any[]
   isCurrentMonth: boolean
+}
+
+// Helper function to clean up captions by removing numbering and prefixes
+function cleanCaption(text: string): string {
+  if (!text) return ""
+  // Remove patterns like "1. Caption:", "1.", "2.", etc.
+  return text
+    .replace(/^\d+\.\s*(Caption:\s*)?/i, "") // Remove starting numbers and "Caption:" prefix
+    .replace(/\s*\d+\.\s*$/g, "") // Remove trailing numbers like "2." at the end
+    .trim()
 }
 
 export function CalendarDay({ id, day, posts, isCurrentMonth }: CalendarDayProps) {
@@ -24,41 +31,29 @@ export function CalendarDay({ id, day, posts, isCurrentMonth }: CalendarDayProps
     <div
       ref={setNodeRef}
       className={`
-        min-h-24 border p-1 transition-colors relative
-        ${isCurrentMonth ? "bg-white" : "bg-gray-50"}
-        ${isCurrentDay ? "border-blue-300" : "border-gray-200"}
-        ${isOver ? "bg-blue-50 border-blue-300" : ""}
+        h-24 rounded-xl overflow-hidden border p-1
+        ${isOver ? "bg-primary-50 border-primary-300" : "border-gray-100"}
+        ${isCurrentDay ? "ring-2 ring-primary-500 ring-offset-2" : ""}
+        ${!isCurrentMonth ? "bg-background opacity-60" : "bg-white"}
       `}
     >
-      <div className="flex justify-between">
-        <span
-          className={`
-          text-sm font-medium
-          ${isCurrentDay ? "text-blue-600" : ""}
-          ${!isCurrentMonth ? "text-gray-400" : ""}
-        `}
-        >
-          {dayNumber}
-        </span>
-        {posts.length > 0 && (
-          <span className="text-xs bg-blue-500 text-white rounded-full h-5 w-5 flex items-center justify-center">
-            {posts.length}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-1 space-y-1 overflow-y-auto max-h-[calc(100%-24px)]">
-        <SortableContext items={posts.map((post) => post.id)} strategy={verticalListSortingStrategy}>
-          {posts.map((post) => (
-            <ScheduledPostItem key={post.id} post={post} />
-          ))}
-        </SortableContext>
-
-        {isOver && posts.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-blue-50 bg-opacity-70 pointer-events-none">
-            <div className="text-xs text-blue-600 font-medium">Drop here</div>
-          </div>
-        )}
+      <div className="h-full flex flex-col">
+        <div className={`text-xs font-medium p-1 ${isCurrentDay ? "text-primary-500" : "text-gray-600"}`}>
+          {format(day, "d")}
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent p-0.5">
+          {posts.length > 0 ? (
+            <div className="space-y-1">
+              {posts.map((post) => (
+                <ScheduledPostItem key={post.id} post={post} />
+              ))}
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <span className="text-xs text-gray-400">Drop here</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

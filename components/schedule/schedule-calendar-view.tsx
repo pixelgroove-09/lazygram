@@ -22,6 +22,16 @@ import { CalendarDay } from "./calendar-day"
 import { UnscheduledPostsSidebar } from "./unscheduled-posts-sidebar"
 import { updateScheduledTime, scheduleUnscheduledImage, removeFromSchedule } from "@/app/actions/schedule-actions"
 
+// Helper function to clean up captions by removing numbering and prefixes
+function cleanCaption(text: string): string {
+  if (!text) return ""
+  // Remove patterns like "1. Caption:", "1.", "2.", etc.
+  return text
+    .replace(/^\d+\.\s*(Caption:\s*)?/i, "") // Remove starting numbers and "Caption:" prefix
+    .replace(/\s*\d+\.\s*$/g, "") // Remove trailing numbers like "2." at the end
+    .trim()
+}
+
 interface ScheduleCalendarViewProps {
   scheduledImages: any[]
   unscheduledImages: any[]
@@ -195,7 +205,7 @@ export default function ScheduleCalendarView({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    <div className="flex flex-col lg:flex-row gap-6">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -204,32 +214,42 @@ export default function ScheduleCalendarView({
         modifiers={[restrictToWindowEdges]}
       >
         <div className="flex-1">
-          <Card>
-            <CardContent className="p-4">
+          <Card className="lazygram-card border-0">
+            <CardContent className="p-6">
               {/* Calendar header */}
-              <div className="flex items-center justify-between mb-4">
-                <Button variant="outline" size="icon" onClick={prevMonth}>
+              <div className="flex items-center justify-between mb-6">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={prevMonth}
+                  className="rounded-full hover:bg-primary-50 hover:text-primary-500"
+                >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <h2 className="text-xl font-semibold">{format(currentMonth, "MMMM yyyy")}</h2>
-                <Button variant="outline" size="icon" onClick={nextMonth}>
+                <h2 className="text-xl font-bold text-gray-800">{format(currentMonth, "MMMM yyyy")}</h2>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={nextMonth}
+                  className="rounded-full hover:bg-primary-50 hover:text-primary-500"
+                >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
 
               {/* Calendar grid */}
-              <div className="grid grid-cols-7 gap-1 mb-1">
+              <div className="grid grid-cols-7 gap-2 mb-2">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div key={day} className="text-center text-sm font-medium py-1">
+                  <div key={day} className="text-center text-sm font-medium py-1 text-gray-600">
                     {day}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-2">
                 {/* Empty cells for days before the first day of month */}
                 {Array.from({ length: monthStart.getDay() }).map((_, index) => (
-                  <div key={`empty-start-${index}`} className="h-24 border border-gray-200 bg-gray-50"></div>
+                  <div key={`empty-start-${index}`} className="h-24 rounded-xl bg-gray-50"></div>
                 ))}
 
                 {/* Calendar days */}
@@ -250,7 +270,7 @@ export default function ScheduleCalendarView({
 
                 {/* Empty cells for days after the last day of month */}
                 {Array.from({ length: 6 - monthEnd.getDay() }).map((_, index) => (
-                  <div key={`empty-end-${index}`} className="h-24 border border-gray-200 bg-gray-50"></div>
+                  <div key={`empty-end-${index}`} className="h-24 rounded-xl bg-gray-50"></div>
                 ))}
               </div>
             </CardContent>
@@ -263,7 +283,7 @@ export default function ScheduleCalendarView({
         {/* Drag overlay */}
         <DragOverlay>
           {activeImage && (
-            <div className="w-16 h-16 rounded-md overflow-hidden bg-white shadow-lg border border-primary">
+            <div className="w-16 h-16 rounded-xl overflow-hidden bg-white shadow-lg border border-primary-300">
               <img
                 src={activeImage.url || "/placeholder.svg"}
                 alt="Post preview"

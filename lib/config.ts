@@ -2,10 +2,6 @@
 
 // Instagram connection settings
 export const instagramConfig = {
-  // Set to false to use real Instagram API instead of mock
-  // Default to true if environment variable is not set
-  useMockMode: process.env.USE_MOCK_INSTAGRAM !== "false",
-
   // API version for Instagram Graph API
   apiVersion: "v18.0",
 
@@ -13,15 +9,9 @@ export const instagramConfig = {
   apiTimeout: 10000,
 }
 
-// Helper function to determine if mock mode is enabled
-// This is safe to use in both client and server components
+// Helper function to always return false for mock mode
+// This ensures backward compatibility with any code still checking this function
 export function isMockModeEnabled(): boolean {
-  // For server components, read directly from env
-  if (typeof window === "undefined") {
-    return process.env.USE_MOCK_INSTAGRAM !== "false"
-  }
-
-  // For client components, use the config object
-  return instagramConfig.useMockMode
+  return false
 }
 

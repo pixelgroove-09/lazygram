@@ -1,3 +1,8 @@
+/**
+ * Note: On Hobby plans, the cron job runs once per day at 12:00 UTC.
+ * These utilities still calculate optimal posting times, but actual posting
+ * will occur during the daily cron job run.
+ */
 import { getScheduleFromDB, getScheduledImagesFromDB } from "./db"
 
 interface ScheduleSettings {
