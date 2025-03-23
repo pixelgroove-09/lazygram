@@ -5,13 +5,17 @@ import { del } from "@vercel/blob"
 import { analyzeImageWithClaude } from "@/lib/claude"
 import { saveImageToDB, getImagesFromDB, updateImageInDB, deleteImageFromDB, getScheduledImagesFromDB } from "@/lib/db"
 
+// Update the getImages function to add better error handling
 export async function getImages() {
   try {
+    console.log("Fetching all images from database")
     const images = await getImagesFromDB()
+    console.log(`Successfully fetched ${images.length} images`)
     return images
   } catch (error) {
     console.error("Error fetching images:", error)
-    throw new Error("Failed to fetch images")
+    // Return an empty array instead of throwing an error
+    return []
   }
 }
 
@@ -112,11 +116,15 @@ export async function unscheduleImage(id: string) {
 
 export async function getScheduledImages() {
   try {
+    console.log("Fetching scheduled images from database")
     const images = await getScheduledImagesFromDB()
+    console.log(`Successfully fetched ${images.length} scheduled images`)
     return images
   } catch (error) {
     console.error("Error fetching scheduled images:", error)
-    throw new Error("Failed to fetch scheduled images")
+    // Return an empty array instead of throwing an error
+    // This prevents the page from crashing when there's a database issue
+    return []
   }
 }
 

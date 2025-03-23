@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import InstagramDiagnostic from "@/components/instagram-diagnostic"
 import PageHeader from "@/components/layout/page-header"
+import DbInitializer from "@/components/db-initializer"
 
 export const metadata: Metadata = {
   title: "Instagram Diagnostic - Lazygram",
@@ -10,7 +11,10 @@ export const metadata: Metadata = {
 export default function DiagnosticPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Instagram Diagnostic" description="Test your Instagram connection and troubleshoot issues" />
+      <div className="flex justify-between items-center">
+        <PageHeader title="Instagram Diagnostic" description="Test your Instagram connection and troubleshoot issues" />
+        <DbInitializer />
+      </div>
 
       <InstagramDiagnostic />
     </div>

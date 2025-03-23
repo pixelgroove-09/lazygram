@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { exchangeCodeForToken, getLongLivedToken, getInstagramBusinessAccounts } from "@/lib/instagram"
 import { updateInstagramInDB } from "@/lib/db"
+import { logger } from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("Instagram callback route called")
+    logger.info("Instagram callback route called")
 
     // Get the authorization code from the URL
     const searchParams = request.nextUrl.searchParams
@@ -15,37 +16,52 @@ export async function GET(request: NextRequest) {
 
     // Check for errors from Facebook
     if (error) {
-      console.error("Error from Facebook:", error, errorReason, errorDescription)
+      logger.error("Error from Facebook:", error, errorReason, errorDescription)
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=${error}&error_description=${encodeURIComponent(errorDescription || "")}`,
       )
     }
 
     if (!code) {
-      console.error("No code provided in callback")
+      logger.error("No code provided in callback")
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_code&error_description=${encodeURIComponent("No authorization code received from Instagram")}`,
       )
     }
 
-    console.log("Code received, exchanging for token")
+    logger.info("Code received, exchanging for token")
+
+    // Check if environment variables are set
+    if (!process.env.INSTAGRAM_APP_ID || !process.env.INSTAGRAM_APP_SECRET) {
+      logger.error("Instagram App credentials are not set")
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=missing_credentials&error_description=${encodeURIComponent("Instagram App ID or Secret is not configured")}`,
+      )
+    }
+
+    if (!process.env.NEXT_PUBLIC_APP_URL) {
+      logger.error("NEXT_PUBLIC_APP_URL environment variable is not set")
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL || ""}/settings?error=missing_app_url&error_description=${encodeURIComponent("App URL is not configured")}`,
+      )
+    }
 
     try {
       // Exchange the code for an access token
       const tokens = await exchangeCodeForToken(code)
 
-      console.log("Token received, exchanging for long-lived token")
+      logger.info("Token received, exchanging for long-lived token")
 
       // Exchange short-lived token for a long-lived token
       const longLivedToken = await getLongLivedToken(tokens.accessToken)
 
-      console.log("Long-lived token received, getting Instagram business accounts")
+      logger.info("Long-lived token received, getting Instagram business accounts")
 
       // Get the user's Instagram business accounts
       const instagramAccounts = await getInstagramBusinessAccounts(longLivedToken)
 
       if (instagramAccounts.length === 0) {
-        console.error("No Instagram business accounts found")
+        logger.error("No Instagram business accounts found")
         return NextResponse.redirect(
           `${process.env.NEXT_PUBLIC_APP_URL}/settings?error=no_business_account&error_description=${encodeURIComponent("No Instagram business accounts found. Please connect an Instagram business account to your Facebook page.")}`,
         )
@@ -53,7 +69,7 @@ export async function GET(request: NextRequest) {
 
       // Use the first Instagram business account
       const instagramAccount = instagramAccounts[0]
-      console.log("Using Instagram account:", instagramAccount.username)
+      logger.info("Using Instagram account:", instagramAccount.username)
 
       // Save the Instagram account info to the database
       await updateInstagramInDB({
@@ -64,12 +80,12 @@ export async function GET(request: NextRequest) {
         profilePicture: instagramAccount.profilePicture,
       })
 
-      console.log("Instagram account saved to database")
+      logger.info("Instagram account saved to database")
 
       // Redirect back to the settings page
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/settings?success=true`)
     } catch (tokenError: any) {
-      console.error("Error during token exchange:", tokenError)
+      logger.error("Error during token exchange:", tokenError)
 
       // Create a more detailed error message
       const errorMessage = tokenError.message || "Failed to exchange authorization code for token"
@@ -84,7 +100,7 @@ export async function GET(request: NextRequest) {
       )
     }
   } catch (error: any) {
-    console.error("Instagram callback error:", error)
+    logger.error("Instagram callback error:", error)
 
     // Create a more detailed error message
     const errorMessage = error.message || "Authentication failed"

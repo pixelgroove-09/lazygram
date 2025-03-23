@@ -1,6 +1,8 @@
 "use server"
 
-import { getScheduleFromDB, updateScheduleInDB, getScheduledImagesFromDB } from "@/lib/db"
+import { revalidatePath } from "next/cache"
+import { getScheduleFromDB, updateScheduleInDB } from "@/lib/db"
+import { scheduleImage, unscheduleImage } from "./image-actions"
 
 export async function getScheduleSettings() {
   try {
@@ -21,6 +23,7 @@ export async function updateScheduleSettings(settings: {
 }) {
   try {
     await updateScheduleInDB(settings)
+    revalidatePath("/settings")
     return { success: true }
   } catch (error) {
     console.error("Error updating schedule settings:", error)
@@ -28,13 +31,39 @@ export async function updateScheduleSettings(settings: {
   }
 }
 
-export async function getScheduledImages() {
+// Update the scheduled time for an image
+export async function updateScheduledTime(imageId: string, newTime: string) {
   try {
-    const images = await getScheduledImagesFromDB()
-    return images
+    await scheduleImage(imageId, newTime)
+    revalidatePath("/schedule")
+    return { success: true }
   } catch (error) {
-    console.error("Error fetching scheduled images:", error)
-    throw new Error("Failed to fetch scheduled images")
+    console.error("Error updating scheduled time:", error)
+    throw new Error("Failed to update scheduled time")
+  }
+}
+
+// Move an image from unscheduled to scheduled
+export async function scheduleUnscheduledImage(imageId: string, scheduledTime: string) {
+  try {
+    await scheduleImage(imageId, scheduledTime)
+    revalidatePath("/schedule")
+    return { success: true }
+  } catch (error) {
+    console.error("Error scheduling image:", error)
+    throw new Error("Failed to schedule image")
+  }
+}
+
+// Remove an image from the schedule
+export async function removeFromSchedule(imageId: string) {
+  try {
+    await unscheduleImage(imageId)
+    revalidatePath("/schedule")
+    return { success: true }
+  } catch (error) {
+    console.error("Error removing from schedule:", error)
+    throw new Error("Failed to remove from schedule")
   }
 }
 
